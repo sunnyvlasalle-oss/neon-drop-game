@@ -1,0 +1,123 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>NEON DROP</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#070817;color:white;font-family:system-ui,Arial;text-align:center;overflow:hidden}
+h1{letter-spacing:7px;color:#71faff;margin:18px 0 4px;text-shadow:0 0 20px #00d9ff}
+p{color:#a6b6d8;margin:4px}
+#stats{display:flex;justify-content:space-around;margin:14px auto;max-width:420px;font-weight:bold}
+#game{display:block;width:min(94vw,420px);height:min(62vh,570px);margin:auto;border:1px solid #28345d;border-radius:16px;background:radial-gradient(ellipse at top,#171b43,#080916 70%);touch-action:none}
+#controls{display:flex;justify-content:center;gap:18px;margin:14px}
+button{background:#151a37;border:1px solid #5b78ff;color:white;padding:13px 24px;border-radius:12px;font-size:16px;font-weight:bold}
+#start{background:#00d9ff;color:#07101e;border:0}
+</style>
+</head>
+<body>
+<h1>NEON DROP</h1>
+<p>Catch the gems. Dodge the bombs.</p>
+<div id="stats">
+<span> SCORE <b id="score">0</b></span>
+<span> BEST <b id="best">0</b></span>
+<span> LIVES <b id="lives">3</b></span>
+</div>
+<canvas id="game"></canvas>
+<div id="controls">
+<button id="left">◀ LEFT</button>
+<button id="start">PLAY</button>
+<button id="right">RIGHT ▶</button>
+</div>
+<p>Use buttons or tap and drag to move.</p>
+<script>
+const canvas=document.querySelector("#game");
+const ctx=canvas.getContext("2d");
+let W=360,H=500,player,items,score,lives,running,frame,best=0;
+try{best=Number(localStorage.getItem("neonBest"))||0}catch(e){}
+document.querySelector("#best").textContent=best;
+function resize(){
+ const r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);
+ W=r.width;H=r.height;canvas.width=W*d;canvas.height=H*d;
+ ctx.setTransform(d,0,0,d,0,0);
+ if(player)player.y=H-38;
+}
+addEventListener("resize",resize);
+function reset(){
+ score=0;lives=3;frame=0;items=[];running=true;
+ player={x:W/2,y:H-38,w:46,h:17};
+ updateStats();document.querySelector("#start").textContent="RESTART";
+}
+function updateStats(){
+ document.querySelector("#score").textContent=score;
+ document.querySelector("#lives").textContent=lives;
+ document.querySelector("#best").textContent=best;
+}
+function move(dir){if(player)player.x=Math.max(25,Math.min(W-25,player.x+dir*27))}
+document.querySelector("#left").onpointerdown=e=>{e.preventDefault();move(-1)};
+document.querySelector("#right").onpointerdown=e=>{e.preventDefault();move(1)};
+document.querySelector("#start").onclick=reset;
+let dragging=false;
+canvas.onpointerdown=e=>{dragging=true;canvas.setPointerCapture(e.pointerId);aim(e)};
+canvas.onpointermove=e=>{if(dragging)aim(e)};
+canvas.onpointerup=()=>dragging=false;
+function aim(e){
+ if(!player)return;
+ const r=canvas.getBoundingClientRect();
+ player.x=Math.max(25,Math.min(W-25,e.clientX-r.left));
+}
+function circle(x,y,r,color){
+ ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+ ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=15;ctx.fill();ctx.shadowBlur=0;
+}
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ for(let i=0;i<24;i++){
+  const x=(i*97+30)%W,y=(i*67+frame*.25)%H;
+  ctx.fillStyle="#39416c";ctx.fillRect(x,y,2,2);
+ }
+ if(!running){
+  ctx.textAlign="center";ctx.fillStyle="white";ctx.font="bold 27px system-ui";
+  ctx.fillText(lives<=0?"GAME OVER":"NEON DROP",W/2,H/2-12);
+  ctx.font="15px system-ui";ctx.fillStyle="#aab9ed";
+  ctx.fillText("Press PLAY to try again",W/2,H/2+23);
+  requestAnimationFrame(draw);return;
+ }
+ frame++;
+ if(frame%Math.max(15,34-Math.floor(score/5))===0){
+  items.push({x:18+Math.random()*(W-36),y:-15,r:10,
+   bomb:Math.random()<.25,speed:2.1+Math.min(4,score*.025)});
+ }
+ items.forEach(o=>{
+  o.y+=o.speed;
+  circle(o.x,o.y,o.r,o.bomb?"#ff356b":"#46f7ff");
+  if(o.bomb){
+   ctx.strokeStyle="#180918";ctx.lineWidth=3;
+   ctx.beginPath();ctx.moveTo(o.x-4,o.y-4);ctx.lineTo(o.x+4,o.y+4);
+   ctx.moveTo(o.x+4,o.y-4);ctx.lineTo(o.x-4,o.y+4);ctx.stroke();
+  }else{
+   ctx.fillStyle="#082032";ctx.fillRect(o.x-2,o.y-5,4,10);
+   ctx.fillRect(o.x-5,o.y-2,10,4);
+  }
+  if(!o.hit&&Math.abs(o.y-player.y)<o.r+10&&Math.abs(o.x-player.x)<o.r+22){
+   o.hit=true;
+   if(o.bomb)lives--;else score++;
+   if(score>best){best=score;try{localStorage.setItem("neonBest",best)}catch(e){}}
+   updateStats();
+   if(lives<=0)running=false;
+  }
+ });
+ items=items.filter(o=>o.y<H+20&&!o.hit);
+ ctx.fillStyle="#00eaff";ctx.shadowColor="#00eaff";ctx.shadowBlur=22;
+ ctx.beginPath();ctx.moveTo(player.x,player.y-15);
+ ctx.lineTo(player.x-23,player.y+10);ctx.lineTo(player.x+23,player.y+10);
+ ctx.closePath();ctx.fill();ctx.shadowBlur=0;
+ ctx.fillStyle="white";ctx.fillRect(player.x-9,player.y-2,18,3);
+ requestAnimationFrame(draw);
+}
+resize();reset();draw();
+</script>
+</body>
+</html>
